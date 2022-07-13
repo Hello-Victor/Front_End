@@ -12,9 +12,15 @@ const methodOverride = require('method-override');
 const ExpressError = require('./utils/ExpressError');
 const { join } = require('path');
 const Review = require('./models/review');
-const campgrounds = require('./routes/campgrounds');
-const reviews = require('./routes/reviews');
+
+const usersRoutes = require('./routes/users')
+const campgroundsRoutes = require('./routes/campgrounds');
+const reviewsRoutes = require('./routes/reviews');
 const flash = require('connect-flash');
+const passport = require('passport');
+const LocalStrategy = require('passport-local');
+const User = require('./models/user');
+
  
 mongoose.connect('mongodb://localhost:27017/YelpCamp');
 
@@ -31,28 +37,6 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true}))
 app.use(methodOverride('_method'));
 
-const validateCampground = (req, res, next) => {
-    const { error } = campgroundSchema.validate(req.body);
-    if(error) {
-        const msg = error.details.map(el => el.message).join(',')
-        throw new ExpressError(msg, 400)
-    } else {
-        next();
-    }
-}
-
-const validateReview = (req, res, next) => {
-    const{error} = reviewSchema.validate(req.body);
-    if(error) {
-        const msg = error.details.map(el => el.message).join(',')
-        throw new ExpressError(msg, 400)
-    } else {
-        next();
-    }
-}
-
-
-
 const sessionConfig = {
     secret:'thisshouldbeabettersecret!',
     resave: false,
@@ -67,14 +51,25 @@ const sessionConfig = {
 app.use(session(sessionConfig));
 app.use(flash());
 
+app.use(passport.initialize());
+app.use(passport.session());
+passport.use(new LocalStrategy(User.authenticate()));
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser()); 
+
+
 app.use((req, res, next) => {
+    console.log(req.session);
+    res.locals.currentUser = req.user;
     res.locals.success = req.flash('success');
     res.locals.error = req.flash('error');
     next();
 })
 
-app.use('/campgrounds', campgrounds)
-app.use('/campgrounds/:id/reviews', reviews)
+
+app.use('/', usersRoutes);
+app.use('/campgrounds', campgroundsRoutes)
+app.use('/campgrounds/:id/reviews', reviewsRoutes)
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
